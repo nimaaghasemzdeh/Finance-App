@@ -224,7 +224,34 @@ def register():
 @login_required
 def sell():
     """Sell shares of stock"""
-    return apology("TODO")
+    data = getStocks()
+    if request.method == 'POST':
+        user_id = session['user_id']
+        result = { 'status' : False }
+        symbol = request.form.get('symbol')
+        shares = int(request.form.get('shares'))
+        # validate input
+        if not validate(symbol, shares):
+            result['reason'] = "You must provide Shares & Symbol or Shares must be potive"
+            return render_template("sell.html", result = result, data = data)
+        # check if user can sell
+        ownedShares = db.execute("SELECT SUM(shares) as shares FROM users_stocks WHERE shares > 0 AND user_id = :user_id AND stock = :symbol GROUP BY stock", user_id = user_id, symbol = symbol)
+        if not ownedShares:
+            result['reason'] = "You do not own the selected stock"
+            return apology("You do not own the selected stock", code=400)
+        elif not ownedShares[0]['shares'] >= shares:
+            result['reason'] = "You do not have enough shares of the selected stock"
+            return render_template("sell.html", result = result, data = data)
+        else:
+            # remove stocks from users portfolio
+            quote = lookup(symbol)
+            amount = quote['price'] * shares
+            modStock(symbol, -shares)
+            # update user cash
+            storeTxn(amount, 'sold', symbol, shares)
+            updateCash(amount)
+    data = getStocks()
+    return render_template("sell.html", data = data)
 
 
 def errorhandler(e):
